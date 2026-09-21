@@ -1,0 +1,122 @@
+{
+  "name": "ae-script-collector",
+  "version": "1.0.1",
+  "description": "AE 脚本集合器桌面应用",
+  "private": true,
+  "main": "main/electron-entry.js",
+  "author": "AE Script Collector",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "electron .",
+    "test": "node --check renderer/renderer.js && node --check preload.js && node --check shared/ipc-contract.js && node --check main/electron-entry.js && node --check main/secure-store.js && node --check main/builtin-resources.js && node --check main/local-db.js && node --check main/script-library.js && node --check main/ipc-script-library.js && node --check main/script-library-bootstrap.js && node --check main/membership-ipc.js && node --check main/hardware-fingerprint.js && node --check main/secure-cache.js && node --check main/device-identity.js && node --check main/electron-hardening.js && node --check main/membership-service.js && node --check main/ae-process.js && node --check main/ae-bridge.js && node --check main/ae-runner.js && node --check scripts/prepare-build.js && node --test tests/ae-communication.test.js && node --test tests/membership.test.js && node --test tests/local-db.test.js",
+    "build:prepare": "node scripts/prepare-build.js",
+    "build:win": "pnpm build:prepare && electron-builder --win",
+    "build:portable": "pnpm build:prepare && electron-builder --win portable",
+    "build:mac": "pnpm build:prepare && electron-builder --mac",
+    "build:dir": "pnpm build:prepare && electron-builder --dir",
+    "build:all": "pnpm build:prepare && electron-builder --win --mac",
+    "dist:clean": "node scripts/clean-dist.js"
+  },
+  "devDependencies": {
+    "electron": "36.9.5",
+    "electron-builder": "26.15.3",
+    "javascript-obfuscator": "4.2.2"
+  },
+  "dependencies": {
+    "better-sqlite3-multiple-ciphers": "13.0.3",
+    "electron-updater": "6.6.2"
+  },
+  "build": {
+    "appId": "com.aescriptcollector.desktop",
+    "productName": "AE脚本集合器",
+    "artifactName": "AE-Script-Collector-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node",
+      "**/node_modules/better-sqlite3-multiple-ciphers/**"
+    ],
+    "npmRebuild": true,
+    "removePackageScripts": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "shared/**/*",
+      "preload.js",
+      "resources/builtin-scripts/**/*",
+      "resources/update-config.json",
+      "package.json",
+      "!tests{,/**}",
+      "!docs{,/**}",
+      "!scripts{,/**}",
+      "!**/*.map",
+      "!**/*.md"
+    ],
+    "directories": {
+      "app": ".build-staging",
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "AE-Script-Collector-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "AE脚本集合器 ${version}",
+      "contents": [
+        {
+          "x": 150,
+          "y": 150
+        },
+        {
+          "x": 450,
+          "y": 150,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}

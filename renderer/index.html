@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AE脚本集合器</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="脚本导航">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">AE</div>
+          <div>
+            <h1>脚本集合器</h1>
+            <p>After Effects 工具箱</p>
+          </div>
+        </div>
+
+        <label class="search-box" for="script-search">
+          <span class="icon" aria-hidden="true">⌕</span>
+          <input id="script-search" type="search" autocomplete="off" placeholder="搜索脚本名称或简介" />
+          <kbd>Ctrl K</kbd>
+        </label>
+
+        <nav id="category-tree" class="category-tree" aria-label="脚本分类">
+          <button class="category-toggle" type="button" data-category="builtin" aria-expanded="true">
+            <span class="category-label"><span class="tree-chevron">⌄</span><span>自研脚本</span></span>
+            <span class="category-count" data-count-for="builtin">0</span>
+          </button>
+          <div class="category-children" data-children-for="builtin"></div>
+
+          <button class="category-toggle" type="button" data-category="external" aria-expanded="true">
+            <span class="category-label"><span class="tree-chevron">⌄</span><span>外部脚本</span></span>
+            <span class="category-count" data-count-for="external">0</span>
+          </button>
+          <div class="category-children" data-children-for="external"></div>
+
+          <button class="category-toggle" type="button" data-category="favorites" aria-expanded="true">
+            <span class="category-label"><span class="tree-chevron">⌄</span><span>常用脚本</span></span>
+            <span class="category-count" data-count-for="favorites">0</span>
+          </button>
+          <div class="category-children" data-children-for="favorites"></div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div id="membership-summary" class="membership-summary" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>正在查询会员状态…</span>
+          </div>
+          <button id="theme-toggle" class="text-button" type="button" aria-label="切换主题">
+            <span aria-hidden="true">◐</span><span>切换主题</span>
+          </button>
+          <button id="update-check" class="text-button" type="button">
+            <span aria-hidden="true">↻</span><span>检查更新</span>
+          </button>
+        </div>
+      </aside>
+
+      <section class="content" aria-label="脚本详情">
+        <header class="content-header">
+          <div>
+            <p id="current-category" class="eyebrow">自研脚本</p>
+            <h2 id="list-title">全部脚本</h2>
+          </div>
+          <div class="header-actions">
+            <button id="import-script" class="primary-button compact-button" type="button">导入脚本</button>
+            <div id="result-count" class="result-count" aria-live="polite">0 个脚本</div>
+          </div>
+        </header>
+
+        <div id="content-grid" class="content-grid">
+          <section class="script-list-panel" aria-label="脚本列表">
+            <div id="list-status" class="list-status" role="status">正在加载脚本…</div>
+            <div id="script-list" class="script-list"></div>
+            <div id="list-empty" class="empty-state hidden">
+              <div class="empty-icon" aria-hidden="true">⌁</div>
+              <h3>没有找到脚本</h3>
+              <p id="empty-message">尝试更换关键词，或从外部导入一个脚本。</p>
+            </div>
+          </section>
+
+          <article id="script-detail" class="detail-panel" aria-live="polite">
+            <div class="detail-placeholder">
+              <div class="placeholder-icon" aria-hidden="true">✦</div>
+              <h3>选择一个脚本</h3>
+              <p>从左侧列表选择脚本，查看详情与运行条件。</p>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <div id="context-menu" class="context-menu hidden" role="menu">
+      <button type="button" data-action="favorite" role="menuitem">收藏脚本</button>
+      <button type="button" data-action="note" role="menuitem">编辑备注</button>
+      <button type="button" data-action="hide" role="menuitem">隐藏脚本</button>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="./renderer.js" defer></script>
+  </body>
+</html>
