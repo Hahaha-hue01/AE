@@ -68,6 +68,7 @@
             <h2 id="list-title">全部脚本</h2>
           </div>
           <div class="header-actions">
+            <button id="scan-script" class="secondary-button compact-button" type="button">自动检索</button>
             <button id="import-script" class="primary-button compact-button" type="button">导入脚本</button>
             <div id="result-count" class="result-count" aria-live="polite">0 个脚本</div>
           </div>
@@ -101,6 +102,8 @@
       <button type="button" data-action="hide" role="menuitem">隐藏脚本</button>
     </div>
 
+    <dialog id="edit-dialog" class="app-dialog"><form id="edit-form" method="dialog"><div class="dialog-header"><div><p class="eyebrow">外部脚本</p><h3>编辑脚本信息</h3></div><button class="icon-button" value="cancel" type="submit" aria-label="关闭">×</button></div><label>脚本名称<input id="edit-name" name="name" maxlength="200" required /></label><label>脚本简介<textarea id="edit-description" name="description" maxlength="4000" rows="4"></textarea></label><label>标签（用逗号分隔）<input id="edit-tags" name="tags" maxlength="1600" /></label><label>使用教程<textarea id="edit-tutorial" name="tutorial" maxlength="12000" rows="5"></textarea></label><div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button class="primary-button" value="save" type="submit">保存</button></div></form></dialog>
+    <dialog id="scan-dialog" class="app-dialog scan-dialog"><form id="scan-form" method="dialog"><div class="dialog-header"><div><p class="eyebrow">本机脚本</p><h3>自动检索电脑中的脚本</h3></div><button class="icon-button" value="cancel" type="submit" aria-label="关闭">×</button></div><p id="scan-status" class="dialog-muted">正在检索常见目录…</p><div id="scan-list" class="scan-list"></div><div class="dialog-actions"><button class="secondary-button" value="cancel" type="submit">取消</button><button id="scan-import" class="primary-button" value="import" type="button" disabled>添加选中脚本</button></div></form></dialog>
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     <script src="./renderer.js" defer></script>
   </body>

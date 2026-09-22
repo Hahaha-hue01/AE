@@ -11,6 +11,8 @@
     search: '',
     membership: { isMember: false, status: 'unknown' },
     contextScriptId: null,
+    lastRun: null,
+    scanCandidates: [],
   };
 
   const $ = (selector) => document.querySelector(selector);
@@ -119,27 +121,50 @@
     const runHint = isAex ? 'AEX 是原生插件，请按安装指引操作' : (script.access === 'member' && !state.membership.isMember ? '开通会员后即可使用' : (!script.canRun && script.access === 'free' ? '当前环境不可运行' : ''));
     const versions = script.aeVersions.length ? script.aeVersions.join('、') : '未指定';
     const editButton = script.category === 'external' ? '<button id="edit-script" class="secondary-button" type="button">编辑信息</button>' : '';
-    $('#script-detail').innerHTML = `<div class="detail-content"><div class="detail-heading"><div><h3>${escapeHtml(script.name)}</h3><p class="detail-description">${escapeHtml(script.description)}</p></div><span class="badge">${escapeHtml(script.runMode)}</span></div><div class="detail-badges"><span class="badge">AE ${escapeHtml(versions)}</span><span class="badge ${script.access === 'member' ? 'access-member' : ''}">${script.access === 'member' ? '会员脚本' : '免费脚本'}</span>${script.note ? `<span class="badge">备注：${escapeHtml(script.note)}</span>` : ''}</div><section class="detail-section"><h4>使用教程</h4><p class="tutorial">${escapeHtml(script.tutorial)}</p></section><div class="detail-actions">${editButton}<button id="run-script" class="primary-button" type="button" ${canRun ? '' : 'disabled'}>${canRun ? '运行脚本' : '暂不可运行'}</button><span class="action-hint">${escapeHtml(runHint)}</span></div></div>`;
+    const runResult = state.lastRun && state.lastRun.id === script.id ? `<section id="run-result" class="run-result ${state.lastRun.error ? 'is-error' : ''}"><div class="run-result-title">${escapeHtml(state.lastRun.title)}</div><pre>${escapeHtml(state.lastRun.body || '')}</pre></section>` : '';
+    $('#script-detail').innerHTML = `<div class="detail-content"><div class="detail-heading"><div><h3>${escapeHtml(script.name)}</h3><p class="detail-description">${escapeHtml(script.description)}</p></div><span class="badge">${escapeHtml(script.runMode)}</span></div><div class="detail-badges"><span class="badge">AE ${escapeHtml(versions)}</span><span class="badge ${script.access === 'member' ? 'access-member' : ''}">${script.access === 'member' ? '会员脚本' : '免费脚本'}</span>${script.note ? `<span class="badge">备注：${escapeHtml(script.note)}</span>` : ''}</div><section class="detail-section"><h4>使用教程</h4><p class="tutorial">${escapeHtml(script.tutorial)}</p></section><div class="detail-actions">${editButton}<button id="run-script" class="primary-button" type="button" ${canRun ? '' : 'disabled'}>${canRun ? '运行脚本' : '暂不可运行'}</button><span class="action-hint">${escapeHtml(runHint)}</span></div>${runResult}</div>`;
     $('#run-script').addEventListener('click', () => runScript(script));
     $('#edit-script')?.addEventListener('click', () => editScript(script));
   }
 
   async function editScript(script) {
-    const name = window.prompt('脚本名称', script.name);
-    if (name === null) return;
-    const description = window.prompt('脚本简介', script.description);
-    if (description === null) return;
-    const tagsText = window.prompt('标签（用逗号分隔）', (script.tags || []).join(', '));
-    if (tagsText === null) return;
-    await updateScript('updateScript', script.id, { name: name.trim(), description: description.trim(), tags: tagsText.split(',').map((tag) => tag.trim()).filter(Boolean) });
+    const dialog = $('#edit-dialog');
+    $('#edit-name').value = script.name;
+    $('#edit-description').value = script.description === '暂无简介。' ? '' : script.description;
+    $('#edit-tags').value = (script.tags || []).join(', ');
+    $('#edit-tutorial').value = script.tutorial === '暂无教程。' ? '' : script.tutorial;
+    dialog.showModal();
+    const result = await new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue), { once: true }));
+    if (result !== 'save') return;
+    const name = $('#edit-name').value.trim();
+    if (!name) { showToast('脚本名称不能为空', 'error'); return; }
+    await updateScript('updateScript', script.id, { name, description: $('#edit-description').value.trim(), tutorial: $('#edit-tutorial').value.trim(), tags: $('#edit-tags').value.split(',').map((tag) => tag.trim()).filter(Boolean) });
+  }
+
+  function renderScanCandidates() {
+    const list = $('#scan-list'); const candidates = state.scanCandidates;
+    $('#scan-import').disabled = !candidates.some((item) => item.selected);
+    list.innerHTML = candidates.length ? candidates.map((item, index) => `<label class="scan-item"><input type="checkbox" data-scan-index="${index}" ${item.selected ? 'checked' : ''}/><span class="scan-item-main"><span class="scan-item-name">${escapeHtml(item.name)}</span><span class="scan-item-path">${escapeHtml(item.path)}</span></span><span class="scan-item-type">${escapeHtml(item.type)}</span></label>`).join('') : '<p class="dialog-muted">没有在常见目录中找到可导入的 JSX、JSXBIN 或 AEX 脚本。</p>';
+  }
+
+  async function scanScripts() {
+    const dialog = $('#scan-dialog'); $('#scan-status').textContent = '正在检索常见目录…'; state.scanCandidates = []; renderScanCandidates(); dialog.showModal();
+    try { const result = await callApi('scanExternalScripts'); state.scanCandidates = (result?.scripts || []).map((item) => ({ ...item, selected: false })); $('#scan-status').textContent = result?.truncated ? '结果较多，仅展示前 500 个脚本；请选择要添加的项目。' : `找到 ${state.scanCandidates.length} 个可导入脚本，请选择要添加的项目。`; renderScanCandidates(); }
+    catch (error) { $('#scan-status').textContent = error.message || '检索失败'; }
+  }
+
+  async function importScannedScripts() {
+    const selected = state.scanCandidates.filter((item) => item.selected); if (!selected.length) return; $('#scan-import').disabled = true; $('#scan-status').textContent = `正在添加 ${selected.length} 个脚本…`;
+    try { const result = await callApi('importExternalScriptPaths', selected.map((item) => item.path)); state.activeCategory = 'external'; await refreshScripts(result.imported?.[0]?.id); renderList(); renderDetail(); $('#scan-dialog').close(); showToast(`已添加 ${result.imported?.length || 0} 个脚本${result.errors?.length ? `，${result.errors.length} 个失败` : ''}`); }
+    catch (error) { $('#scan-status').textContent = error.message || '批量导入失败'; $('#scan-import').disabled = false; }
   }
 
   async function importScript() {
     try {
       const imported = await callApi('importExternalScript');
       if (!imported) return;
-      await refreshScripts(imported.id);
       state.activeCategory = 'external';
+      await refreshScripts(imported.id);
       renderList();
       renderDetail();
       showToast(`已导入：${imported.name}`);
@@ -147,10 +172,9 @@
   }
 
   async function runScript(script) {
-    try {
-      await callApi('runScript', script.id);
-      showToast(`已发送运行请求：${script.name}`);
-    } catch (error) { showToast(error.message || '运行请求失败', 'error'); }
+    state.lastRun = { id: script.id, title: '正在运行…', body: '已将脚本交给 After Effects 执行。脚本界面由 AE 承载，运行结果会回到这里。' }; renderDetail();
+    try { const result = await callApi('runScript', script.id); state.lastRun = { id: script.id, title: '运行完成', body: result?.returnValue || '脚本已执行完成（没有返回文本）。' }; renderDetail(); showToast(`已完成运行：${script.name}`); }
+    catch (error) { state.lastRun = { id: script.id, title: '运行失败', body: error.message || '运行请求失败', error: true }; renderDetail(); showToast(error.message || '运行请求失败', 'error'); }
   }
 
   async function refreshMembership() {
@@ -255,6 +279,9 @@
     document.addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); $('#script-search').focus(); } });
     $('#theme-toggle').addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
     $('#import-script').addEventListener('click', importScript);
+    $('#scan-script').addEventListener('click', scanScripts);
+    $('#scan-list').addEventListener('change', (event) => { const index = Number(event.target.dataset.scanIndex); if (Number.isInteger(index) && state.scanCandidates[index]) { state.scanCandidates[index].selected = event.target.checked; renderScanCandidates(); } });
+    $('#scan-import').addEventListener('click', importScannedScripts);
     $('#update-check').addEventListener('click', checkForUpdate);
     if (typeof api.onUpdateStatus === 'function') api.onUpdateStatus(renderUpdateStatus);
     $('#category-tree').addEventListener('click', (event) => { const toggle = event.target.closest('.category-toggle'); const child = event.target.closest('.category-child'); if (child) { state.activeCategory = child.closest('.category-children')?.dataset.childrenFor || state.activeCategory; state.selectedId = child.dataset.scriptId; renderList(); renderDetail(); return; } if (toggle) { const category = toggle.dataset.category; const expanded = toggle.getAttribute('aria-expanded') === 'true'; toggle.setAttribute('aria-expanded', String(!expanded)); $(`[data-children-for="${category}"]`).hidden = expanded; selectCategory(category); } });

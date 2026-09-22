@@ -7,6 +7,8 @@ const IPC_CHANNELS = Object.freeze({
   GET_SCRIPT: 'scripts:get',
   RUN_SCRIPT: 'scripts:run',
   IMPORT_EXTERNAL: 'scripts:import-external',
+  SCAN_EXTERNAL: 'scripts:scan-external',
+  IMPORT_EXTERNAL_PATHS: 'scripts:import-external-paths',
   UPDATE_SCRIPT: 'scripts:update',
   SET_FAVORITE: 'scripts:set-favorite',
   SET_NOTE: 'scripts:set-note',

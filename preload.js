@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('aeScripts', {
   getScript: (scriptId) => ipcRenderer.invoke(IPC_CHANNELS.GET_SCRIPT, scriptId),
   runScript: (scriptId) => ipcRenderer.invoke(IPC_CHANNELS.RUN_SCRIPT, scriptId),
   importExternalScript: () => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXTERNAL),
+  scanExternalScripts: () => ipcRenderer.invoke(IPC_CHANNELS.SCAN_EXTERNAL),
+  importExternalScriptPaths: (paths) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_EXTERNAL_PATHS, paths),
   updateScript: (scriptId, patch) => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_SCRIPT, scriptId, patch),
   setFavorite: (scriptId, payload) => ipcRenderer.invoke(IPC_CHANNELS.SET_FAVORITE, scriptId, payload),
   setNote: (scriptId, payload) => ipcRenderer.invoke(IPC_CHANNELS.SET_NOTE, scriptId, payload),

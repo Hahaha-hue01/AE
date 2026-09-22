@@ -36,6 +36,14 @@
 
 主进程弹出文件选择器，只接受 `.jsx`、`.jsxbin`、`.aex`，完成文件头、大小、SHA-256 和重复校验后复制到用户数据目录。取消选择返回 `null`。
 
+## `scanExternalScripts()` → `Promise<{ roots: string[], scripts: ScanCandidate[] }>`
+
+扫描用户常见目录中的 JSX、JSXBIN 和 AEX 文件，只返回可解析的元数据候选项；不会自动导入。
+
+## `importExternalScriptPaths(paths)` → `Promise<{ imported: Script[], errors: object[] }>`
+
+将用户在扫描结果中勾选的文件按原有导入校验逐个复制到应用管理目录，单个文件失败不会阻断其它文件。
+
 ## `updateScript(scriptId, patch)` → `Promise<Script>`
 
 仅允许外部脚本修改 `name`、`description`、`tags`、`category`、`tutorial` 和 `aeVersions`。内置脚本的不可变元数据不能通过此接口修改。

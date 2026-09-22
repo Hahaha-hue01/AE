@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const os = require('node:os');
 
 const MAX_TEXT_BYTES = 50 * 1024 * 1024;
 const MAX_METADATA_BYTES = 64 * 1024;
@@ -181,6 +182,26 @@ function createScriptLibrary({ db, builtinStore, managedScriptsDir, canRunScript
     };
   }
 
+  async function importExternalPaths(filePaths = []) {
+    if (!Array.isArray(filePaths) || filePaths.length > 100) throw new Error('一次最多导入 100 个脚本');
+    const imported = []; const errors = [];
+    for (const filePath of filePaths) { try { imported.push(await importExternal(filePath)); } catch (error) { errors.push({ path: String(filePath), message: error.message || '导入失败' }); } }
+    return { imported, errors };
+  }
+
+  async function scanExternalScripts({ roots, maxFiles = 500 } = {}) {
+    const home = os.homedir();
+    const defaultRoots = process.platform === 'win32' ? [path.join(home, 'Desktop'), path.join(home, 'Documents'), path.join(home, 'Downloads'), path.join(home, 'OneDrive', 'Desktop'), path.join(home, 'OneDrive', 'Documents')] : [path.join(home, 'Desktop'), path.join(home, 'Documents'), path.join(home, 'Downloads'), path.join(home, 'Library', 'Application Support', 'Adobe')];
+    const searchRoots = [...new Set((Array.isArray(roots) && roots.length ? roots : defaultRoots).map((item) => path.resolve(String(item))).filter((item) => item !== path.resolve(managedScriptsDir)))];
+    const found = []; const seen = new Set(); const visited = new Set(); const ignored = new Set(['node_modules', '.git', '.svn', 'cache', 'caches', 'temp', 'tmp']);
+    async function walk(directory, depth) {
+      if (found.length >= maxFiles || depth > 5 || visited.has(directory)) return; visited.add(directory); let entries; try { entries = await fs.readdir(directory, { withFileTypes: true }); } catch { return; }
+      for (const entry of entries) { if (found.length >= maxFiles) break; if (entry.name.startsWith('.') || ignored.has(entry.name.toLowerCase())) continue; const fullPath = path.join(directory, entry.name); if (entry.isDirectory()) { await walk(fullPath, depth + 1); continue; } if (!entry.isFile() || !/\.(jsx|jsxbin|aex)$/i.test(entry.name)) continue; try { const parsed = await parseExternalFile(fullPath); if (seen.has(parsed.hash)) continue; seen.add(parsed.hash); found.push({ id: parsed.hash, path: parsed.sourcePath, name: parsed.name, description: parsed.description, type: parsed.type, sizeBytes: parsed.content.length, originalName: parsed.originalName }); } catch { } }
+    }
+    for (const rootPath of searchRoots) await walk(rootPath, 0);
+    return { roots: searchRoots, truncated: found.length >= maxFiles, scripts: found.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')) };
+  }
+
   async function importExternal(filePath) {
     ensureInitialized();
     const parsed = await parseExternalFile(filePath);
@@ -245,7 +266,7 @@ function createScriptLibrary({ db, builtinStore, managedScriptsDir, canRunScript
     return runner({ script, managedPath: builtinById.has(id) ? null : getExternal(id)?.managed_path, decryptBuiltin: () => builtinStore.decrypt(id) });
   }
 
-  return { initialize, list, get: (id) => display(id), importExternal, parseExternalFile, update, setPreference, recordUse, run, getBuiltinMetadata: () => Array.from(builtinById.values()).map(({ payload, ...metadata }) => metadata) };
+  return { initialize, list, get: (id) => display(id), importExternal, importExternalPaths, scanExternalScripts, parseExternalFile, update, setPreference, recordUse, run, getBuiltinMetadata: () => Array.from(builtinById.values()).map(({ payload, ...metadata }) => metadata) };
 }
 
 module.exports = { createScriptLibrary, MAX_TEXT_BYTES };

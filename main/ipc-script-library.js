@@ -39,6 +39,15 @@ function registerScriptLibraryIpc({ ipcMain, dialog, getMainWindow, library, run
     if (result.canceled || !result.filePaths[0]) return null;
     try { return await library.importExternal(result.filePaths[0]); } catch (error) { throw ipcError(error.code || 'SCRIPT_IMPORT_FAILED', error.message); }
   });
+  ipcMain.handle(IPC_CHANNELS.SCAN_EXTERNAL, async (event) => {
+    assertSender(event);
+    try { return await library.scanExternalScripts(); } catch (error) { throw ipcError(error.code || 'SCRIPT_SCAN_FAILED', error.message); }
+  });
+  ipcMain.handle(IPC_CHANNELS.IMPORT_EXTERNAL_PATHS, async (event, paths = []) => {
+    assertSender(event);
+    if (!Array.isArray(paths) || paths.length > 100 || paths.some((item) => typeof item !== 'string' || item.length > 4096)) throw ipcError('SCRIPT_IMPORT_INVALID', '待导入脚本列表无效');
+    try { return await library.importExternalPaths(paths); } catch (error) { throw ipcError(error.code || 'SCRIPT_IMPORT_FAILED', error.message); }
+  });
   ipcMain.handle(IPC_CHANNELS.UPDATE_SCRIPT, (event, scriptId, patch = {}) => {
     assertSender(event);
     try { return library.update(requireId(scriptId), patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {}); } catch (error) { throw ipcError(error.code || 'SCRIPT_UPDATE_FAILED', error.message); }
