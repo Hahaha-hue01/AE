@@ -1,4 +1,6 @@
 {
-  "url": "",
-  "provider": "generic"
+  "provider": "github",
+  "owner": "Hahaha-hue01",
+  "repo": "AE",
+  "releaseType": "release"
 }

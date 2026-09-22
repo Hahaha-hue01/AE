@@ -1,6 +1,6 @@
 {
   "name": "ae-script-collector",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AE 脚本集合器桌面应用",
   "private": true,
   "main": "main/electron-entry.js",
@@ -15,7 +15,9 @@
     "build:mac": "pnpm build:prepare && electron-builder --mac",
     "build:dir": "pnpm build:prepare && electron-builder --dir",
     "build:all": "pnpm build:prepare && electron-builder --win --mac",
-    "dist:clean": "node scripts/clean-dist.js"
+    "dist:clean": "node scripts/clean-dist.js",
+    "release:win": "pnpm build:prepare && electron-builder --win --publish always",
+    "release:mac": "pnpm build:prepare && electron-builder --mac --publish always"
   },
   "devDependencies": {
     "electron": "36.9.5",
@@ -117,6 +119,14 @@
           "path": "/Applications"
         }
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Hahaha-hue01",
+        "repo": "AE",
+        "releaseType": "release"
+      }
+    ]
   }
 }

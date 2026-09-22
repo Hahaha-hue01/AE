@@ -3,18 +3,35 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { IPC_CHANNELS } = require('../shared/ipc-contract');
 
-function readConfiguredUrl(app) {
-  if (process.env.AE_UPDATE_URL) return process.env.AE_UPDATE_URL;
+function readUpdateConfig(app) {
+  const envProvider = process.env.AE_UPDATE_PROVIDER;
+  const envUrl = process.env.AE_UPDATE_URL;
+  if (envProvider === 'github') {
+    return { provider: 'github', owner: process.env.AE_UPDATE_OWNER || '', repo: process.env.AE_UPDATE_REPO || '', releaseType: process.env.AE_UPDATE_RELEASE_TYPE || 'release' };
+  }
+  if (envUrl) return { provider: 'generic', url: envUrl };
   try {
     const configPath = path.join(app.getAppPath(), 'resources', 'update-config.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return typeof config.url === 'string' && config.url.trim() ? config.url.trim() : '';
-  } catch { return ''; }
+    return config && typeof config === 'object' ? config : {};
+  } catch { return {}; }
 }
 
-function createUpdateService({ app, ipcMain, getMainWindow, updateUrl = readConfiguredUrl(app) } = {}) {
+function validateConfig(config) {
+  if (!config || typeof config !== 'object') return { provider: '' };
+  if (config.provider === 'github') {
+    if (!/^[A-Za-z0-9_.-]+$/.test(config.owner || '') || !/^[A-Za-z0-9_.-]+$/.test(config.repo || '')) return { provider: '', error: 'GitHub 更新配置缺少 owner 或 repo' };
+    return { provider: 'github', owner: config.owner, repo: config.repo, releaseType: config.releaseType === 'draft' ? 'draft' : 'release' };
+  }
+  if (config.provider === 'generic' && typeof config.url === 'string' && /^https:\/\//i.test(config.url)) return { provider: 'generic', url: config.url.replace(/\/$/, '') };
+  return { provider: '', error: '更新地址必须使用 HTTPS，或配置 GitHub Releases' };
+}
+
+function createUpdateService({ app, ipcMain, getMainWindow, updateConfig = readUpdateConfig(app) } = {}) {
   if (!app || !ipcMain || typeof ipcMain.handle !== 'function') throw new Error('更新服务初始化参数不完整');
-  let state = { status: updateUrl ? 'idle' : 'not_configured', version: null, progress: 0, error: null };
+  const config = validateConfig(updateConfig);
+  let state = { status: config.provider ? 'idle' : 'not_configured', version: null, progress: 0, error: config.error || null };
+  let checking = null;
   const getWindow = () => (typeof getMainWindow === 'function' ? getMainWindow() : null);
   const publish = (next) => {
     state = { ...state, ...next };
@@ -25,28 +42,32 @@ function createUpdateService({ app, ipcMain, getMainWindow, updateUrl = readConf
     const window = getWindow();
     if (window?.webContents && event.sender !== window.webContents) throw Object.assign(new Error('未授权的渲染进程'), { code: 'FORBIDDEN_SENDER' });
   };
+  const configured = () => Boolean(config.provider && app.isPackaged);
 
-  if (updateUrl) {
+  if (config.provider) {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowDowngrade = false;
     autoUpdater.on('checking-for-update', () => publish({ status: 'checking', error: null }));
     autoUpdater.on('update-available', (info) => publish({ status: 'available', version: info.version, progress: 0, error: null }));
     autoUpdater.on('update-not-available', (info) => publish({ status: 'up-to-date', version: info.version || app.getVersion(), progress: 0, error: null }));
-    autoUpdater.on('download-progress', (progress) => publish({ status: 'downloading', progress: Math.round(progress.percent || 0) }));
+    autoUpdater.on('download-progress', (progress) => publish({ status: 'downloading', progress: Math.round(progress.percent || 0), error: null }));
     autoUpdater.on('update-downloaded', (info) => publish({ status: 'downloaded', version: info.version, progress: 100, error: null }));
     autoUpdater.on('error', (error) => publish({ status: 'error', error: error.message || '更新服务失败' }));
-    // Generic provider 可由运行环境注入，避免把占位域名打进生产包。
-    autoUpdater.setFeedURL({ provider: 'generic', url: updateUrl });
+    if (config.provider === 'github') autoUpdater.setFeedURL({ provider: 'github', owner: config.owner, repo: config.repo, releaseType: config.releaseType });
+    else autoUpdater.setFeedURL({ provider: 'generic', url: config.url });
+  }
+
+  async function check() {
+    if (!app.isPackaged) return publish({ status: 'dev-build', error: null });
+    if (!config.provider) return publish({ status: 'not_configured', error: config.error || '尚未配置更新服务器' });
+    if (checking) return checking;
+    checking = autoUpdater.checkForUpdates().then(() => ({ ...state })).catch((error) => publish({ status: 'error', error: error.message || '检查更新失败' })).finally(() => { checking = null; });
+    return checking;
   }
 
   ipcMain.handle(IPC_CHANNELS.UPDATE_STATUS, (event) => { assertSender(event); return { ...state }; });
-  ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, async (event) => {
-    assertSender(event);
-    if (!app.isPackaged) return publish({ status: 'dev-build', error: null });
-    if (!updateUrl) return publish({ status: 'not_configured', error: '尚未配置更新服务器' });
-    try { await autoUpdater.checkForUpdates(); return { ...state }; } catch (error) { return publish({ status: 'error', error: error.message || '检查更新失败' }); }
-  });
+  ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, (event) => { assertSender(event); return check(); });
   ipcMain.handle(IPC_CHANNELS.UPDATE_DOWNLOAD, async (event) => {
     assertSender(event);
     if (state.status !== 'available') return { ...state };
@@ -61,9 +82,9 @@ function createUpdateService({ app, ipcMain, getMainWindow, updateUrl = readConf
 
   return {
     getStatus: () => ({ ...state }),
-    check: () => autoUpdater.checkForUpdates(),
-    start: async () => { if (app.isPackaged && updateUrl) { try { await autoUpdater.checkForUpdates(); } catch { /* 状态已由 error 事件发布 */ } } },
+    check,
+    start: async () => { if (configured()) await check(); },
   };
 }
 
-module.exports = { createUpdateService };
+module.exports = { createUpdateService, readUpdateConfig, validateConfig };
