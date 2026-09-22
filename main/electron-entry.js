@@ -69,7 +69,12 @@ async function initializeRuntime() {
   const contentKeyProvider = async ({ id } = {}) => {
     const record = (await secureStore.read()) || {};
     const key = record[`contentKey:${id}`] || record.contentKey;
-    if (!key) throw Object.assign(new Error('内置脚本内容密钥未配置'), { code: 'CONTENT_KEY_UNAVAILABLE' });
+    if (!key && process.env.BUILTIN_CONTENT_KEY && /^[0-9a-fA-F]{64}$/.test(process.env.BUILTIN_CONTENT_KEY)) {
+      const injectedKey = Buffer.from(process.env.BUILTIN_CONTENT_KEY, 'hex').toString('base64url');
+      await secureStore.write({ ...record, [`contentKey:${id}`]: injectedKey });
+      return Buffer.from(injectedKey, 'base64url');
+    }
+    if (!key) throw Object.assign(new Error('内置脚本内容密钥未配置：请由发布配置注入 BUILTIN_CONTENT_KEY，或联系管理员完成安全授权'), { code: 'CONTENT_KEY_UNAVAILABLE' });
     return Buffer.from(key, 'base64url');
   };
   runtime = await bootstrapScriptLibrary({ app, ipcMain, dialog, getMainWindow: () => mainWindow, dbKeyProvider, contentKeyProvider, runner: aeRunner.execute, membershipService });

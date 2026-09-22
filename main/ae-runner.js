@@ -82,7 +82,8 @@ function createAeRunner({ platform = process.platform, tempRoot = path.join(os.t
         const appName = selected.appPath ? path.basename(selected.appPath, '.app') : `Adobe After Effects ${selected.version}`;
         await executeViaMacAppleScript(appName, bridgePath);
       } else if (running.length > 0) {
-        throw Object.assign(new Error('检测到 AE 已运行。Windows 外部 Electron 没有跨版本官方 DoScript 接口，请安装/启用 CEP 或本地桥接后重试'), { code: 'AE_RUNNING_BRIDGE_REQUIRED' });
+        const child = spawnProcess(selected.executable, ['-r', bridgePath], { detached: true, stdio: 'ignore', windowsHide: true });
+        child.unref();
       } else if (platform === 'darwin') {
         await exec('/usr/bin/open', ['-a', selected.appPath], { timeout: 30000, maxBuffer: 1024 * 1024 });
         await waitForAeProcess(now() + Math.min(timeoutMs, 90000));
