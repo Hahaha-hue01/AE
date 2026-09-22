@@ -1,6 +1,6 @@
 {
   "name": "ae-script-collector",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "AE 脚本集合器桌面应用",
   "private": true,
   "main": "main/electron-entry.js",
@@ -71,8 +71,7 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "arm64"
+            "x64"
           ]
         }
       ],
