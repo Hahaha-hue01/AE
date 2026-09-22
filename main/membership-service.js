@@ -58,13 +58,23 @@ function requestJson({ baseUrl, endpoint, method = 'POST', body, headers = {}, t
   });
 }
 
-function createMembershipService({ baseUrl, endpoints = {}, cache, publicKeys = {}, issuer = 'ae-script-api', audience = 'ae-script-desktop', deviceIdentity, fingerprintProvider = collectHardwareFingerprint, httpsApi, now = () => Date.now(), appVersion = 'unknown' } = {}) {
+function createMembershipService({ baseUrl, endpoints = {}, cache, publicKeys = {}, issuer = 'ae-script-api', audience = 'ae-script-desktop', deviceIdentity, fingerprintProvider = collectHardwareFingerprint, httpsApi, now = () => Date.now(), appVersion = 'unknown', contentKeySink } = {}) {
   if (!baseUrl || !cache || !deviceIdentity || typeof deviceIdentity.getPrivateKey !== 'function' || typeof deviceIdentity.getPublicKey !== 'function') throw new Error('会员服务缺少 API、缓存或设备密钥提供器');
   let hardware;
   let identity;
   let cached = null;
   let onlinePromise = null;
   const paths = { challenge: '/v1/auth/challenges', login: '/v1/auth/login', activate: '/v1/activations/card', validate: '/v1/license/validate', offline: '/v1/license/offline-grants', ...endpoints };
+
+  async function persistContentKeys(response) {
+    if (!response || !response.content_keys || typeof contentKeySink !== 'function') return;
+    const entries = Array.isArray(response.content_keys) ? response.content_keys : Object.keys(response.content_keys).map((scriptId) => ({ script_id: scriptId, ...response.content_keys[scriptId] }));
+    for (const entry of entries) {
+      if (!entry || typeof entry.script_id !== 'string' || !/^[a-zA-Z0-9._-]{1,160}$/.test(entry.script_id)) continue;
+      if (typeof entry.key !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(entry.key)) continue;
+      await contentKeySink({ scriptId: entry.script_id, keyId: entry.key_id || null, key: entry.key, expiresAt: entry.expires_at || null });
+    }
+  }
 
   async function ensureDevice() {
     if (!hardware) hardware = await fingerprintProvider();
@@ -113,6 +123,7 @@ function createMembershipService({ baseUrl, endpoints = {}, cache, publicKeys = 
     if (next.offlineGrant) verifyGrant(next.offlineGrant, publicKeys, { issuer, audience, deviceId: identity.deviceId, deviceKeyFingerprint: identity.publicKeyFingerprint });
     await saveCache(next);
     if (response.decision === 'deny' || response.decision === 'reconnect_required') throw Object.assign(new Error(response.reason || '会员授权被拒绝'), { code: response.reason_code || 'MEMBERSHIP_DENIED' });
+    await persistContentKeys(response);
     const onlineGrant = response.offline_grant || next.offlineGrant;
     return { isMember: true, status: 'online', expiresAt: response.membership?.expires_at || (onlineGrant ? verifyGrant(onlineGrant, publicKeys, { issuer, audience, deviceId: identity.deviceId, deviceKeyFingerprint: identity.publicKeyFingerprint }).exp : null), entitlements: response.entitlements || [] };
   }
@@ -148,6 +159,7 @@ function createMembershipService({ baseUrl, endpoints = {}, cache, publicKeys = 
     const response = await requestJson({ baseUrl, endpoint: paths.activate, method: 'POST', body, headers: signed.headers, httpsApi });
     const next = { ...(await loadCache()), accessToken: response.access_token, refreshToken: response.refresh_token, offlineGrant: response.offline_grant, deviceId: identity.deviceId, deviceKeyFingerprint: identity.publicKeyFingerprint, lastTrustedServerTime: Date.parse(response.server_time || new Date(now()).toISOString()), lastLocalTime: now(), membership: response.membership || null };
     if (next.offlineGrant) verifyGrant(next.offlineGrant, publicKeys, { issuer, audience, deviceId: identity.deviceId, deviceKeyFingerprint: identity.publicKeyFingerprint });
+    await persistContentKeys(response);
     await saveCache(next);
     return getStatus();
   }
@@ -159,12 +171,13 @@ function createMembershipService({ baseUrl, endpoints = {}, cache, publicKeys = 
     const response = await requestJson({ baseUrl, endpoint: paths.login, method: 'POST', body, headers: signed.headers, httpsApi });
     const next = { ...(await loadCache()), accessToken: response.access_token, refreshToken: response.refresh_token, offlineGrant: response.offline_grant, deviceId: identity.deviceId, deviceKeyFingerprint: identity.publicKeyFingerprint, lastTrustedServerTime: Date.parse(response.server_time || new Date(now()).toISOString()), lastLocalTime: now(), membership: response.membership || null };
     if (next.offlineGrant) verifyGrant(next.offlineGrant, publicKeys, { issuer, audience, deviceId: identity.deviceId, deviceKeyFingerprint: identity.publicKeyFingerprint });
+    await persistContentKeys(response);
     await saveCache(next);
     return getStatus();
   }
 
   async function startupCheck() { try { return await validateOnline('app_launch'); } catch { return getStatus(); } }
-  return { getStatus, canRunScript, validateOnline, startupCheck, activateCard, login, clear: () => cache.clear(), ensureDevice };
+  return { getStatus, canRunScript, validateOnline, startupCheck, activateCard, login, clear: () => cache.clear(), ensureDevice, persistContentKeys };
 }
 
 module.exports = { createMembershipService, verifyGrant, parseJws, requestJson, MAX_OFFLINE_MS };
